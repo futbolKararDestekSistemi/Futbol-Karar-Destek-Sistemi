@@ -3,16 +3,21 @@
  *
  * Bu dosya uygulamanın giriş noktasıdır (entry point).
  * Middleware'leri, route'ları ve veritabanı bağlantısını başlatır.
+ *
+ * ÖNEMLİ: dotenv.config() diğer tüm require'lardan ÖNCE çağrılmalıdır.
+ * Aksi halde modüller yüklenirken process.env değerleri henüz tanımlı
+ * olmaz ve API anahtarı 'undefined' olarak geçer.
  */
 
+// .env dosyasını EN ÖNCE yükle — hiçbir modül bundan önce gelmemeli
+const dotenv = require('dotenv');
+dotenv.config();
+
+// Artık process.env.GEMINI_API_KEY hazır, modüller güvenle yüklenebilir
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const analysisRoutes = require('./routes/analysisRoutes');
 const { initializeDatabase } = require('./models/database');
-
-// .env dosyasındaki değişkenleri process.env'e yükle
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;

@@ -1,121 +1,183 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useState, useEffect, useCallback } from 'react'
 import './App.css'
 
+import Header from './components/Header'
+import PositionForm from './components/PositionForm'
+import ResultCard from './components/ResultCard'
+import LoadingSpinner from './components/LoadingSpinner'
+import History from './components/History'
+import Stats from './components/Stats'
+
+/**
+ * App — Ana Bileşen
+ *
+ * Uygulamanın state yönetimi, API iletişimi ve
+ * bileşen düzeni bu dosyada merkezi olarak yönetilir.
+ *
+ * Tab Yapısı:
+ *  - Analiz: Pozisyon giriş formu + AI sonucu
+ *  - Geçmiş: Önceki analizlerin listesi
+ *  - İstatistik: Karar dağılımı grafiği
+ */
+
+const API_BASE = '/api/analysis'
+
 function App() {
-  const [count, setCount] = useState(0)
+  // ─── State ─────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState('analyze')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [result, setResult] = useState(null)
+
+  const [history, setHistory] = useState([])
+  const [stats, setStats] = useState([])
+  const [historyLoaded, setHistoryLoaded] = useState(false)
+  const [statsLoaded, setStatsLoaded] = useState(false)
+
+  // ─── API Fonksiyonları ─────────────────────────────────────
+
+  /**
+   * Pozisyonu AI'ya gönderir ve sonucu alır.
+   */
+  const handleAnalyze = async (positionText) => {
+    setLoading(true)
+    setError(null)
+    setResult(null)
+
+    try {
+      const res = await fetch(`${API_BASE}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ position: positionText }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Bilinmeyen bir hata oluştu.')
+      }
+
+      setResult(data)
+
+      // Geçmiş ve istatistikleri güncelle (yeni analiz eklendi)
+      setHistoryLoaded(false)
+      setStatsLoaded(false)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  /**
+   * Analiz geçmişini backend'den çeker.
+   */
+  const fetchHistory = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/history`)
+      if (res.ok) {
+        const data = await res.json()
+        setHistory(data)
+      }
+    } catch {
+      // Sessizce hata yut — geçmiş yüklenemezse kritik değil
+    } finally {
+      setHistoryLoaded(true)
+    }
+  }, [])
+
+  /**
+   * İstatistikleri backend'den çeker.
+   */
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/stats`)
+      if (res.ok) {
+        const data = await res.json()
+        setStats(data)
+      }
+    } catch {
+      // Sessizce hata yut
+    } finally {
+      setStatsLoaded(true)
+    }
+  }, [])
+
+  // ─── Tab Değişiminde Veri Yükleme ─────────────────────────
+
+  useEffect(() => {
+    if (activeTab === 'history' && !historyLoaded) {
+      fetchHistory()
+    }
+    if (activeTab === 'stats' && !statsLoaded) {
+      fetchStats()
+    }
+  }, [activeTab, historyLoaded, statsLoaded, fetchHistory, fetchStats])
+
+  // ─── Render ────────────────────────────────────────────────
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
+    <div className="app">
+      <Header />
+
+      {/* Tab Navigasyonu */}
+      <nav className="tabs" role="tablist">
         <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
+          className={`tabs__btn ${activeTab === 'analyze' ? 'tabs__btn--active' : ''}`}
+          onClick={() => setActiveTab('analyze')}
+          role="tab"
+          aria-selected={activeTab === 'analyze'}
         >
-          Count is {count}
+          🔍 Analiz
         </button>
-      </section>
+        <button
+          className={`tabs__btn ${activeTab === 'history' ? 'tabs__btn--active' : ''}`}
+          onClick={() => setActiveTab('history')}
+          role="tab"
+          aria-selected={activeTab === 'history'}
+        >
+          📋 Geçmiş
+        </button>
+        <button
+          className={`tabs__btn ${activeTab === 'stats' ? 'tabs__btn--active' : ''}`}
+          onClick={() => setActiveTab('stats')}
+          role="tab"
+          aria-selected={activeTab === 'stats'}
+        >
+          📊 İstatistik
+        </button>
+      </nav>
 
-      <div className="ticks"></div>
+      {/* Tab İçerikleri */}
+      {activeTab === 'analyze' && (
+        <>
+          <PositionForm onSubmit={handleAnalyze} loading={loading} />
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+          {error && (
+            <div className="error" role="alert">
+              <span>⚠️</span>
+              <span>{error}</span>
+            </div>
+          )}
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+          {loading && <LoadingSpinner />}
+
+          {result && !loading && <ResultCard result={result} />}
+        </>
+      )}
+
+      {activeTab === 'history' && <History history={history} />}
+
+      {activeTab === 'stats' && <Stats stats={stats} />}
+
+      {/* Footer */}
+      <footer className="footer">
+        <p>
+          Futbol Karar Destek Sistemi &copy; {new Date().getFullYear()} —
+          Powered by <a href="https://ai.google.dev/" target="_blank" rel="noopener noreferrer">Gemini AI</a>
+        </p>
+      </footer>
+    </div>
   )
 }
 

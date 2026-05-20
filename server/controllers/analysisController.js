@@ -8,6 +8,7 @@
 
 const { analyzePosition } = require('../services/aiService');
 const { saveAnalysisResult, getAllAnalyses, getDecisionStats } = require('../services/dbService');
+const { isValidPositionText } = require('../utils/validators');
 
 /**
  * POST /api/analysis/analyze
@@ -16,9 +17,11 @@ const { saveAnalysisResult, getAllAnalyses, getDecisionStats } = require('../ser
 const analyze = async (req, res) => {
   const { position } = req.body;
 
-  // Girdi kontrolü
-  if (!position) {
-    return res.status(400).json({ error: 'Pozisyon metni boş olamaz.' });
+  // Geliştirilmiş girdi kontrolü (validators.js kullanılıyor)
+  if (!isValidPositionText(position)) {
+    return res.status(400).json({
+      error: 'Pozisyon metni 10–2000 karakter arasında olmalıdır.',
+    });
   }
 
   try {
@@ -44,9 +47,22 @@ const analyze = async (req, res) => {
       belirsizlik_yuzdesi: aiResult.belirsizlik_yuzdesi,
     });
   } catch (error) {
-    // Hata yönetimi — kullanıcıya anlamlı mesaj
     // eslint-disable-next-line no-console
     console.error('Analiz hatası:', error.message);
+
+    // Rate limit (429) — ücretsiz kota aşıldı
+    const isRateLimit =
+      error.message?.includes('429') ||
+      error.message?.includes('quota') ||
+      error.message?.includes('FreeTier') ||
+      error.message?.includes('retryDelay');
+
+    if (isRateLimit) {
+      return res.status(429).json({
+        error: 'Gemini API dakikalık kotası aşıldı. Lütfen 30-60 saniye bekleyip tekrar deneyin.',
+      });
+    }
+
     return res.status(500).json({
       error: 'Analiz sırasında bir hata oluştu. Lütfen tekrar deneyin.',
     });
