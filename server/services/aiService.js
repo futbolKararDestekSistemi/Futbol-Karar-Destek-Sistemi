@@ -9,12 +9,14 @@
  * - Structured Output: JSON formatında yanıt isteme
  * - Temperature Control: 0.2 — tutarlı, kural odaklı yanıtlar
  * - Few-Shot Prompting: Örnek senaryo → doğru karar formatı
+ *
+ * Paket: @google/genai (Google'ın güncel SDK'sı, v1 API kullanır)
  */
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai');
 
 // Gemini istemcisini başlat (API anahtarı .env'den okunur)
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 /**
  * Gemini'ye gönderilecek sistem komutu (System Prompt).
@@ -27,13 +29,14 @@ Kullanıcının anlattığı futbol pozisyonunu analiz et ve YALNIZCA aşağıda
   "karar": "Sarı Kart | Kırmızı Kart | Penaltı | Serbest Vuruş | Ofsayt | Taç | Kale Vuruşu | Köşe Vuruşu | Devam Et | Gol Geçerli | Gol İptal",
   "kural_maddesi": "IFAB Kural [numara]: [kural adı]",
   "aciklama": "Kararının gerekçesi, hangi eylemi neden kurala aykırı bulduğunu açıkla.",
-  "belirsizlik_yuzdesi": 0-100 arası sayı (0=kesin karar, 100=tamamen belirsiz)
+  "belirsizlik_yuzdesi": 0
 }
 
 Önemli Kurallar:
 - Futbol dışı sorulara yanıt verme, sadece "Bu soruyu yanıtlayamam." de.
 - Her zaman IFAB kural maddesine (örn. "IFAB Kural 12: Faul ve Nezaketsizce Davranış") atıfta bulun.
 - Yanıtın SADECE JSON olsun, başka metin ekleme.
+- belirsizlik_yuzdesi alanına 0-100 arası bir SAYI yaz, açıklama değil.
 - Türkçe yanıt ver.`;
 
 /**
@@ -42,28 +45,31 @@ Kullanıcının anlattığı futbol pozisyonunu analiz et ve YALNIZCA aşağıda
  * @returns {Promise<Object>} - Yapılandırılmış karar objesi
  */
 const analyzePosition = async (positionText) => {
-  // Girdi doğrulama — futbol dışı ve çok kısa metinleri filtrele
+  // Girdi doğrulama
   if (!positionText || positionText.trim().length < 10) {
     throw new Error('Lütfen pozisyonu daha ayrıntılı açıklayın (en az 10 karakter).');
   }
 
-  // Gemini modelini yapılandır
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
-    generationConfig: {
-      temperature: 0.2,        // Düşük = tutarlı, yaratıcılıktan uzak yanıtlar
+  // API'ye istek gönder (@google/genai söz dizimi)
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.0-flash-lite', // Teşhis ile doğrulandı — bu API key ile çalışan model
+    contents: positionText,
+    config: {
+      temperature: 0.2,       // Düşük = tutarlı, kural odaklı yanıtlar
       maxOutputTokens: 1024,
-      responseMimeType: 'application/json', // JSON formatında yanıt iste
+      systemInstruction: SYSTEM_PROMPT,
     },
-    systemInstruction: SYSTEM_PROMPT,
   });
 
-  // API'ye istek gönder
-  const result = await model.generateContent(positionText);
-  const responseText = result.response.text();
+  const responseText = response.text;
 
-  // JSON'u ayrıştır ve döndür
-  const parsed = JSON.parse(responseText);
+  // Yanıttan JSON bloğunu çıkar (model bazen ```json ... ``` ekleyebilir)
+  const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error('Yapay zeka geçerli bir JSON yanıtı döndürmedi.');
+  }
+
+  const parsed = JSON.parse(jsonMatch[0]);
   return parsed;
 };
 

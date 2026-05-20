@@ -7,9 +7,16 @@
 
 const Database = require('better-sqlite3');
 const path = require('path');
+const fs = require('fs');
 
 // Veritabanı dosyasının konumu: server/data/futbol.db
 const DB_PATH = path.join(__dirname, '..', 'data', 'futbol.db');
+const DB_DIR = path.join(__dirname, '..', 'data');
+
+// data/ klasörü yoksa otomatik oluştur
+if (!fs.existsSync(DB_DIR)) {
+  fs.mkdirSync(DB_DIR, { recursive: true });
+}
 
 let db;
 
